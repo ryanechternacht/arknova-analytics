@@ -24,8 +24,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const autoLoaded = useRef(false);
   const [saved, setSaved] = useState<Omit<CachedGame, 'raw'>[]>([]);
-
-
+  // The bookmarklet setup, shown over a loaded game (the home page always shows it).
+  const [showConnect, setShowConnect] = useState(false);
 
   const loadJson = useCallback((json: unknown) => {
     const g = analyze(normalizeInput(json));
@@ -78,8 +78,9 @@ export default function App() {
       }
       if (bridge.status !== 'connected' || !bridge.bridge.alive) {
         setError(
-          'To load games by link, open boardgamearena.com (logged in) and click the “Ark Nova Analytics” bookmarklet. It opens this page connected to BGA.',
+          `Table ${id} isn’t saved here yet, and this page isn’t connected to BGA. Connect with the bookmarklet below, then load it again.`,
         );
+        setShowConnect(true);
         return;
       }
       setLoading(`Loading table ${id} from BGA…`);
@@ -180,12 +181,13 @@ export default function App() {
             Load
           </button>
         </form>
-        <BridgePill state={bridge} />
+        <BridgePill state={bridge} onClick={() => setShowConnect((v) => !v)} />
       </header>
 
       <main className="main">
         {loading && <div className="notice">{loading}</div>}
         {error && <div className="error">{error}</div>}
+        {game && showConnect && bridge.status !== 'connected' && <ConnectCard />}
 
         {game ? (
           <>
@@ -226,7 +228,7 @@ export default function App() {
   );
 }
 
-function BridgePill({ state }: { state: BridgeState }) {
+function BridgePill({ state, onClick }: { state: BridgeState; onClick: () => void }) {
   if (state.status === 'connected')
     return (
       <span className="pill">
@@ -235,14 +237,63 @@ function BridgePill({ state }: { state: BridgeState }) {
       </span>
     );
   if (state.status === 'connecting') return <span className="pill">Connecting to BGA…</span>;
-  if (state.status === 'failed')
-    return (
-      <span className="pill">
-        <span className="dot" style={{ background: 'var(--bad)' }} />
-        BGA tab not responding
-      </span>
-    );
-  return <span className="pill">Not connected to BGA</span>;
+  return (
+    <button className="pill pill-btn" onClick={onClick} title="How to connect to BGA">
+      {state.status === 'failed' && <span className="dot" style={{ background: 'var(--bad)' }} />}
+      {state.status === 'failed' ? 'BGA tab not responding' : 'Not connected to BGA'} · connect
+    </button>
+  );
+}
+
+// How to get the bookmarklet and connect this page to BGA.
+function ConnectCard() {
+  const appUrl = window.location.origin + window.location.pathname;
+  const href = useMemo(() => bookmarkletHref(appUrl), [appUrl]);
+  const bookmarkRef = useRef<HTMLAnchorElement>(null);
+
+  // React refuses javascript: URLs in href, so set it directly on the element.
+  useEffect(() => {
+    bookmarkRef.current?.setAttribute('href', href);
+  }, [href]);
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Connect to Board Game Arena</h2>
+      </div>
+      <div className="steps">
+        <div>
+          <div className="step-num">1</div>
+          <div>
+            Drag this button to your bookmarks bar (show it with ⌘⇧B):
+            <br />
+            <a ref={bookmarkRef} className="bookmarklet" onClick={(e) => e.preventDefault()}>
+              Ark Nova Analytics
+            </a>
+          </div>
+        </div>
+        <div>
+          <div className="step-num">2</div>
+          <div>
+            Open <a href="https://boardgamearena.com" target="_blank" rel="noreferrer">boardgamearena.com</a> while
+            logged in, then click the bookmark. If you’re on a game’s replay or review page, that game loads right
+            away.
+          </div>
+        </div>
+        <div>
+          <div className="step-num">3</div>
+          <div>
+            This page opens in a new tab, connected to BGA. Pick one of your recent games, or paste any table link in
+            the box above. Keep the BGA tab open: it does the fetching.
+          </div>
+        </div>
+      </div>
+      <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
+        BGA game logs need your BGA login, so the bookmark fetches them from your BGA tab and passes them to this page.
+        Nothing is sent anywhere else. Each new game counts toward BGA’s daily replay limit; saved games don’t.
+      </p>
+    </div>
+  );
 }
 
 function Home({
@@ -259,15 +310,6 @@ function Home({
   onFile: (f: File) => void;
 }) {
   const [over, setOver] = useState(false);
-  const appUrl = window.location.origin + window.location.pathname;
-  const href = useMemo(() => bookmarkletHref(appUrl), [appUrl]);
-  const bookmarkRef = useRef<HTMLAnchorElement>(null);
-
-  // React refuses javascript: URLs in href, so set it directly on the element.
-  useEffect(() => {
-    bookmarkRef.current?.setAttribute('href', href);
-  }, [href]);
-
   const me = bridge.status === 'connected' ? bridge.hello.me : null;
 
   return (
@@ -320,44 +362,7 @@ function Home({
         </div>
       )}
 
-      {bridge.status !== 'connected' && (
-        <div className="card">
-          <div className="card-head">
-            <h2>Analyze an Ark Nova game from Board Game Arena</h2>
-          </div>
-          <div className="steps">
-            <div>
-              <div className="step-num">1</div>
-              <div>
-                Drag this button to your bookmarks bar:
-                <br />
-                <a ref={bookmarkRef} className="bookmarklet" onClick={(e) => e.preventDefault()}>
-                  Ark Nova Analytics
-                </a>
-              </div>
-            </div>
-            <div>
-              <div className="step-num">2</div>
-              <div>
-                Open <a href="https://boardgamearena.com" target="_blank" rel="noreferrer">boardgamearena.com</a> while
-                logged in, then click the bookmark. If you’re on a game’s replay or review page, that game loads
-                right away.
-              </div>
-            </div>
-            <div>
-              <div className="step-num">3</div>
-              <div>
-                This page reopens connected to BGA. Pick one of your recent games, or paste any table link in the box
-                above.
-              </div>
-            </div>
-          </div>
-          <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
-            BGA game logs need your BGA login, so the bookmark fetches them from your BGA tab and passes them to this
-            page. Nothing is sent anywhere else.
-          </p>
-        </div>
-      )}
+      {bridge.status !== 'connected' && <ConnectCard />}
 
       {saved.length > 0 && (
         <div className="card">

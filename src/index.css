@@ -266,6 +266,18 @@ h3 {
   white-space: nowrap;
 }
 
+.pill-btn {
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pill-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
 .dot {
   width: 8px;
   height: 8px;
